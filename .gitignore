@@ -1,5 +1,6 @@
 node_modules/
 dist/
+coverage/
 *.tgz
 *.tsbuildinfo
 .DS_Store
@@ -7,4 +8,14 @@ dist/
 .env.*
 !.env.example
 npm-debug.log*
+.pi/
 .turnlog/
+.tickets/
+.jj/
+
+# CLU shareable configuration/templates remain tracked; ignore only local state.
+.clu/*.sqlite*
+.clu/backups/
+
+# Local acceptance-test output and session data.
+sessions/
