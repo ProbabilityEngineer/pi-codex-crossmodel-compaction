@@ -489,7 +489,7 @@ function isCompactionSummaryInput(value: unknown): boolean {
   );
 }
 
-function isRemoteCompactionDetails(value: unknown): value is RemoteCompactionDetails {
+export function isRemoteCompactionDetails(value: unknown): value is RemoteCompactionDetails {
   return (
     isRecord(value) &&
     value.kind === REMOTE_COMPACTION_KIND &&
@@ -508,6 +508,57 @@ function isRemoteCompactionDetails(value: unknown): value is RemoteCompactionDet
     value.encryptedContent.length <= MAX_ENCRYPTED_CONTENT_CHARS &&
     (value.usage === undefined || isCodexCompactionUsage(value.usage))
   );
+}
+
+/** Transition requests use the same serializer, bounds and transport as ordinary
+ * compaction, but explicitly select the source checkpoint and source model. */
+export async function createTransitionCheckpoint(
+  ctx: ExtensionContext,
+  model: Model<any>,
+  previous: RemoteCompactionDetails,
+  messages: AgentMessage[],
+  getTools: () => readonly Tool[],
+  thinkingLevel?: string,
+  transform?: (payload: Record<string, unknown>) => Record<string, unknown>,
+): Promise<RemoteCompactionDetails | undefined> {
+  const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+  if (!auth.ok || !auth.apiKey || !isRemoteCompactionCompatible(
+    previous, model, getCodexAccountFingerprint(auth.apiKey), getCodexAuthKind(ctx.modelRegistry, model),
+  )) return undefined;
+  const payload = await captureCodexPayload(
+    model, ctx.getSystemPrompt(), convertToLlm(messages), getTools(), auth.apiKey,
+    auth.headers, ctx.sessionManager.getSessionId(), ctx.signal ?? new AbortController().signal, thinkingLevel,
+  );
+  if (!payload || !Array.isArray(payload.input)) return undefined;
+  const base: Record<string, unknown> = {
+    ...payload,
+    input: [
+      { type: "compaction", encrypted_content: previous.encryptedContent },
+      ...payload.input,
+      { type: "compaction_trigger" },
+    ],
+  };
+  const body = transform?.(base) ?? base;
+  body.model = model.id;
+  body.store = false;
+  body.stream = true;
+  if (!Array.isArray(body.input)) return undefined;
+  const first = body.input[0];
+  const last = body.input[body.input.length - 1];
+  if (!isRecord(first) || first.type !== "compaction" ||
+      first.encrypted_content !== previous.encryptedContent ||
+      !isRecord(last) || last.type !== "compaction_trigger" ||
+      body.input.filter(item => isRecord(item) && item.type === "compaction").length !== 1) return undefined;
+  const input = boundCompactionInput(
+    body.input, ctx.getSystemPrompt(), Array.isArray(body.tools) ? body.tools : [],
+    model.contextWindow, body,
+  );
+  if (!input) return undefined;
+  const result = await requestRemoteCompactionWithUsage({
+    model, apiKey: auth.apiKey, authHeaders: auth.headers,
+    sessionId: ctx.sessionManager.getSessionId(), body: { ...body, input }, signal: ctx.signal,
+  });
+  return { ...previous, encryptedContent: result.encryptedContent, usage: result.usage };
 }
 
 export function getCodexAuthKind(

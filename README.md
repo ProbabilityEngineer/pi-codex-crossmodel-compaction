@@ -50,7 +50,39 @@ Print, JSON, and RPC modes receive no extra notification.
 
 When Pi starts compaction on a supported Codex model, the extension sends a streamed Responses request whose `input` contains only discardable history, any compatible prior checkpoint, and a `compaction_trigger` item. The normal request envelope is retained because Codex's compaction path is parity-tested against ordinary Responses requests; this includes the effective system prompt, active tool definitions, reasoning level, prompt-cache fields, and routing fields. The request uses the `remote_compaction_v2` beta feature, and the returned opaque checkpoint and bounded provider usage are stored in the Pi compaction entry. Later requests rehydrate the raw checkpoint only when the model, endpoint, account, and authentication mode match; other providers/models receive the bounded textual fallback instead.
 
-Compaction uses the model active when Pi triggers it. If a session switches from a larger to a smaller model, the remote request is bounded against the new model's context window and tool outputs are reduced before sending. A previous opaque checkpoint is treated as incompatible after a model, endpoint, account, or authentication-mode switch; Pi's readable previous summary is sent instead. If the full request still cannot fit, the extension leaves compaction to Pi's normal implementation.
+Ordinary compaction uses the model active when Pi triggers it. If a session switches from a larger to a smaller model, the ordinary remote request is bounded against the new model's context window and tool outputs are reduced before sending. A previous opaque checkpoint is treated as incompatible after a model, endpoint, account, or authentication-mode switch; Pi's readable previous summary is sent instead. If the full request still cannot fit, the extension leaves compaction to Pi's normal implementation.
+
+### Best-effort cross-model native compaction
+
+An explicit Codex model selection can trigger **one** transition compaction before
+the next user request. The source model compacts its compatible checkpoint plus
+the session tail, excluding the incoming user message. The returned opaque
+checkpoint is left unchanged and locally associated with the target model.
+Subsequent requests, including tool-call/result continuations, reuse that
+checkpoint normally; they do not trigger another transition.
+
+OpenAI does not publicly document a general cross-model checkpoint-portability
+guarantee. A successful source-model compaction makes the fresh checkpoint
+locally eligible for target-model use, not proof of guaranteed server acceptance.
+Endpoint, account, and authentication isolation checks still apply.
+
+Unsafe, interrupted, stale, or failed transitions use the existing textual
+fallback without automatically retrying the transition. Versioned custom session
+entries (`pi-codex-compaction:transition:v1`) record `PENDING`, `TRANSITIONING`,
+`TRANSITIONED`, or `FALLBACK`; unfinished state after reload resolves to fallback.
+These entries are not model context or per-tool-turn notifications.
+
+Transition requires an intact session history and a user-request boundary. If
+another extension changes the context, or the user switches mid-tool-turn, the
+extension conservatively uses text. The original bounded fallback is retained;
+successful transitions also retain a bounded readable excerpt for their new
+boundary, without increasing the existing fallback limit.
+
+There is no general context recovery, context-overflow recovery, or automatic
+replay of failed logical requests or tool calls. Target-model errors retain Pi's
+ordinary error handling; this extension does not reliably classify every provider
+rejection or streaming failure. A later ordinary Pi compaction can establish a
+fresh checkpoint.
 
 If the remote request fails or returns an unexpected response, Pi's standard compaction path runs. Cancellation remains cancelled. Custom compaction instructions also use Pi's standard path because RemoteCompactionV2 has no documented custom-instructions field. The direct checkpoint request is restricted to `https://chatgpt.com`, rejects redirects, limits request/response size, and never decodes or logs `encrypted_content`. No configuration is required.
 
@@ -73,7 +105,7 @@ still uses the existing fallback.
 ### Fallback diagnostics
 
 A fallback on a supported model records a local custom session entry with type
-`pi-codex-crossmodel-compaction:fallback:v1`. It contains `version: 1` and a reason:
+`pi-codex-compaction:fallback:v1`. It contains `version: 1` and a reason:
 `custom-instructions`, `auth-unavailable`, `request-unavailable`,
 `context-window-unavailable`, `context-limit`, `request-size-limit`, or
 `remote-failed`. Size failures also include estimated tokens, token budget,
@@ -103,12 +135,15 @@ Failed compaction does not change saved reasoning state.
 Pi 0.85.1 does not expose grammar metadata in `getAllTools()`. Two synchronous,
 versioned `pi.events` contracts let cooperating extensions supply it:
 
-- `pi-codex-crossmodel-compaction:tools:v1`: `{ model, tools }`, before provider serialization.
+- `pi-codex-compaction:tools:v1`: `{ model, tools }`, before provider serialization.
   A tool owner can attach its own `constrainedSampling` metadata.
-- `pi-codex-crossmodel-compaction:request:v1`: `{ ctx, messages, payload }`, after input
+- `pi-codex-compaction:request:v1`: `{ ctx, messages, payload }`, after input
   assembly and before size checks. A listener can replace `payload`. This event
   is not the general `before_provider_request` chain and does not carry auth.
   Size checks use the transformed envelope, including field removals.
+
+These persisted/event identifiers retain their original upstream namespace for
+compatibility; they are not npm package names.
 
 Other extensions' private request changes are not applied automatically.
 Unknown third-party grammar metadata needs cooperation through the tools event.

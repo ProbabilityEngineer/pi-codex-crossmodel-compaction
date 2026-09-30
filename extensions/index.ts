@@ -6,6 +6,8 @@ import type {
 import { Text } from "@earendil-works/pi-tui";
 import { BETA_FEATURE, getCodexAccountFingerprint } from "../src/codex-wire.js";
 import { reportInstallTelemetry } from "../src/install-telemetry.js";
+import { TransitionCoordinator } from "../src/transition-coordinator.js";
+import { latestTransition } from "../src/transition-state.js";
 import {
   applyRemoteCompactionMarker,
   COMPACTION_FALLBACK_ENTRY,
@@ -31,12 +33,39 @@ const COMPACTION_SAVED_ENTRY = "pi-codex-compaction:saved:v1";
 
 export default function piCodexCompaction(pi: ExtensionAPI): void {
   reportInstallTelemetry();
+  const transitions = new TransitionCoordinator(
+    (type, data) => pi.appendEntry(type, data),
+    model => {
+      const active = new Set(pi.getActiveTools());
+      const data = { model, tools: pi.getAllTools().filter(tool => active.has(tool.name)) };
+      pi.events?.emit("pi-codex-compaction:tools:v1", data);
+      return data.tools;
+    },
+    () => pi.getThinkingLevel?.(),
+    (payload, ctx, messages) => {
+      const data = { payload, ctx, messages };
+      pi.events?.emit("pi-codex-compaction:request:v1", data);
+      return data.payload;
+    },
+  );
+  pi.on("model_select", (event, ctx) => transitions.select(event, ctx));
+  pi.on("context", async (event, ctx) => {
+    const messages = await transitions.context(event.messages, ctx);
+    return messages ? { messages } : undefined;
+  });
+  pi.on("session_start", () => transitions.invalidate());
+  pi.on("session_shutdown", () => transitions.invalidate());
+  pi.on("session_before_switch", () => { transitions.invalidate(); });
+  pi.on("session_before_fork", () => { transitions.invalidate(); });
+  pi.on("session_before_tree", () => { transitions.invalidate(); });
+  pi.on("session_tree", () => transitions.invalidate());
 
   pi.registerEntryRenderer(COMPACTION_SAVED_ENTRY, (_entry, _options, theme) =>
     new Text(theme.fg("dim", "[compaction (codex)] Checkpoint saved."), 1, 0),
   );
 
   const onBeforeCompact: ExtensionHandler<SessionBeforeCompactEvent, { compaction?: NonNullable<Awaited<ReturnType<typeof createRemoteCompaction>>> }> = async (event, ctx) => {
+    transitions.invalidate();
     if (!supportsRemoteCompaction(ctx.model)) return undefined;
 
     let reported = false;
@@ -111,8 +140,11 @@ export default function piCodexCompaction(pi: ExtensionAPI): void {
     event.headers["x-codex-beta-features"] = features.join(",");
   });
 
-  pi.on("before_provider_request", (event, ctx) => {
+  pi.on("before_provider_request", async (event, ctx) => {
     if (!supportsRemoteCompaction(ctx.model)) return;
+    if (latestTransition(ctx.sessionManager.buildContextEntries(), ctx.sessionManager.getSessionId())) {
+      return transitions.requestPayload(event.payload, ctx);
+    }
     const details = findActiveRemoteCompaction(ctx.sessionManager.buildContextEntries());
     if (!details) return;
 
