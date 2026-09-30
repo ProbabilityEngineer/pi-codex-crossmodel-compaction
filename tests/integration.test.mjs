@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test, { beforeEach } from "node:test";
-import { codexHarness, compactionResponse, requestBody, textResponse } from "../../../tests/codex-harness.mjs";
+import { codexHarness, compactionResponse, requestBody, textResponse } from "./support/codex-harness.mjs";
 
 process.env.CI = "1";
 process.env.PI_OFFLINE = "1";
 beforeEach((t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new Error("Unmocked network request blocked"); });
 });
-const { default: fast } = await import("../../pi-fast/extensions/index.ts");
-const { default: tools } = await import("../../pi-codex-tools/extensions/index.ts");
+const { default: fast } = await import("./fixtures/pi-fast/extensions/index.ts");
+const { default: tools } = await import("./fixtures/pi-codex-tools/extensions/index.ts");
 const { default: compaction } = await import("../extensions/index.ts");
 const { COMPACTION_FALLBACK_ENTRY } = await import("../src/index.ts");
 const zeroUsage = {

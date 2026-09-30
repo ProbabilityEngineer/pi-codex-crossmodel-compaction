@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { Container } from "@earendil-works/pi-tui";
-import { codexHarness, compactionResponse, requestBody, textResponse } from "../../../tests/codex-harness.mjs";
+import { codexHarness, compactionResponse, requestBody, textResponse } from "./support/codex-harness.mjs";
 import compaction from "../extensions/index.ts";
 
 process.env.CI = "1";
