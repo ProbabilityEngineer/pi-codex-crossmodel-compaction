@@ -1,4 +1,4 @@
-# pi-codex-compaction
+# pi-codex-crossmodel-compaction
 
 Keep long Pi sessions usable on OpenAI Codex models by replacing Pi's local summary request with Codex's provider-side **RemoteCompactionV2** checkpoint when the current model supports the Codex Responses API.
 
@@ -18,20 +18,26 @@ The current Codex catalog includes `gpt-6-astra`, `gpt-5.6-sol`, `gpt-5.6-terra`
 ## Installation
 
 ```bash
-pi install npm:pi-codex-compaction
+pi install npm:pi-codex-crossmodel-compaction
 ```
 
 For local development:
 
 ```bash
-pi install /path/to/pi-mono/packages/pi-codex-compaction
+pi install /path/to/pi-codex-crossmodel-compaction
 ```
 
 Or load it for one run:
 
 ```bash
-pi -e /path/to/pi-mono/packages/pi-codex-compaction
+pi -e /path/to/pi-codex-crossmodel-compaction
 ```
+
+## Provenance
+
+This project originated as `jvm/pi-mono/packages/pi-codex-compaction` and is
+now independently maintained as `pi-codex-crossmodel-compaction`. It is not
+maintained or endorsed by the upstream project or its maintainers.
 
 ## Behavior
 
@@ -67,7 +73,7 @@ still uses the existing fallback.
 ### Fallback diagnostics
 
 A fallback on a supported model records a local custom session entry with type
-`pi-codex-compaction:fallback:v1`. It contains `version: 1` and a reason:
+`pi-codex-crossmodel-compaction:fallback:v1`. It contains `version: 1` and a reason:
 `custom-instructions`, `auth-unavailable`, `request-unavailable`,
 `context-window-unavailable`, `context-limit`, `request-size-limit`, or
 `remote-failed`. Size failures also include estimated tokens, token budget,
@@ -97,9 +103,9 @@ Failed compaction does not change saved reasoning state.
 Pi 0.85.1 does not expose grammar metadata in `getAllTools()`. Two synchronous,
 versioned `pi.events` contracts let cooperating extensions supply it:
 
-- `pi-codex-compaction:tools:v1`: `{ model, tools }`, before provider serialization.
+- `pi-codex-crossmodel-compaction:tools:v1`: `{ model, tools }`, before provider serialization.
   A tool owner can attach its own `constrainedSampling` metadata.
-- `pi-codex-compaction:request:v1`: `{ ctx, messages, payload }`, after input
+- `pi-codex-crossmodel-compaction:request:v1`: `{ ctx, messages, payload }`, after input
   assembly and before size checks. A listener can replace `payload`. This event
   is not the general `before_provider_request` chain and does not carry auth.
   Size checks use the transformed envelope, including field removals.
@@ -135,7 +141,7 @@ Use only a temporary file if you test `apply_patch`. Do not generate images.
 
 ```bash
 npm install
-npm run -w packages/pi-codex-compaction check
-npm test -w packages/pi-codex-compaction
-npm run -w packages/pi-codex-compaction pack:dry-run
+npm run check
+npm test
+npm run pack:dry-run
 ```
