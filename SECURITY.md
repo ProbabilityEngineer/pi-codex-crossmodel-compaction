@@ -1,0 +1,52 @@
+# Security Policy
+
+## Supported versions
+
+Security fixes are provided for the latest released version of `pi-codex-compaction`.
+
+## Reporting a vulnerability
+
+Please do not open a public issue for suspected security vulnerabilities.
+
+Report privately through [GitHub Security Advisories](https://github.com/jvm/pi-mono/security/advisories/new) or by contacting the repository maintainer through GitHub. Include:
+
+- a description of the issue;
+- steps to reproduce;
+- affected versions or commits, if known;
+- any suggested mitigation.
+
+## Security model
+
+`pi-codex-compaction` is a Pi package. Pi extensions execute with the same permissions as the local user running Pi. Users should review installed Pi packages and only install packages from sources they trust.
+
+For supported `openai-codex` models, the extension sends the portion of conversation Pi is about to discard to the OpenAI Codex Responses endpoint over HTTPS, using credentials and provider headers resolved by Pi. The request also includes the normal Codex Responses envelope: the effective system prompt, active tool schemas, reasoning settings, and provider-generated cache/routing fields. It stores the provider-issued opaque `encrypted_content` checkpoint in the local Pi session's compaction details so compatible Codex requests can reuse it. The checkpoint is not decoded, printed, or logged.
+
+The extension bounds request, compaction input, and response size, validates the HTTPS endpoint against the official `chatgpt.com` origin, rejects redirects, validates the account claim shape, binds checkpoints to a hashed account identity/model/endpoint/authentication mode, honors Pi cancellation, and retries only transient transport failures. It falls back to standard Pi compaction on authentication, transport, response, or context-limit failures. A bounded textual transcript excerpt remains in the compaction summary so switching to another model or provider does not leave the session with only an unusable Codex checkpoint. The fallback may contain conversation content already present in the local session and is still subject to the user's normal Pi session-file permissions.
+
+The extension never logs prompts, conversation contents, credentials, authorization headers, or raw provider responses. Install/update telemetry is best-effort and sends only package/version/runtime metadata; it can be disabled with `PI_OFFLINE=1`, `PI_TELEMETRY=0`, or Pi's `enableInstallTelemetry: false` setting.
+
+Direct requests allow only the official `/backend-api/codex/responses` endpoint
+on the default HTTPS port, without query strings or fragments. Total request
+time is limited to five minutes, including retries. Completed streams are closed
+without waiting for a server disconnect. A pre-aborted request does no network I/O.
+Null auth headers remove matching model headers; beta features are merged.
+
+Cooperating local extensions can inspect and transform compaction inputs through
+the documented event bus before size checks. These events contain no credentials.
+They have the same trust level as other installed Pi extensions.
+
+Context sizing uses `ceil(UTF-8 serialized request bytes / 4)` with an 8,192-token
+reserve from the active model's context window. It is an estimate, not a strict
+tokenizer bound. The complete transformed envelope is counted, including opaque
+content at its serialized size. A separate 16 MiB uncompressed request limit is
+enforced before network I/O. The HTTPS, redirect, response-size, checkpoint
+compatibility, and cancellation checks remain independent of token estimation.
+
+Fallback diagnostics store only a fixed reason code and finite non-negative
+size counters in `pi-codex-compaction:fallback:v1` custom session entries.
+These local records never include credentials, account/model identifiers,
+request content, encrypted checkpoints, or raw errors, and do not enter model
+context. No external diagnostic telemetry is added. They use the existing
+session's permissions and retention policy.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development and validation instructions.

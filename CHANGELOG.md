@@ -1,0 +1,67 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+This project follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and uses semantic versioning.
+
+## [Unreleased]
+
+## [0.1.5] - 2026-09-17
+
+### Fixed
+
+- Persist the Codex compaction confirmation as a rendered, non-model session entry so Pi's post-compaction chat rebuild does not erase it.
+
+## [0.1.4] - 2026-09-15
+
+### Added
+
+- Show `[compaction (codex)] Checkpoint saved.` in the TUI after a Codex checkpoint is saved, to distinguish it from standard Pi compaction.
+
+## [0.1.3] - 2026-09-11
+
+### Fixed
+
+- Estimate compaction tokens separately from request bytes so long Codex sessions do not fall back merely because UTF-8 bytes exceed the token budget.
+- Respect request-transform field removals when sizing, restrict warnings to TUI mode, and distinguish preparation failures from transport failures.
+- Preserve the independent 16 MiB request ceiling, count the complete transformed envelope, and reject unavailable context limits.
+- Record safe fallback reasons and numeric size diagnostics in local custom session entries; notify when UI is available without exposing request or provider content.
+
+## [0.1.2] - 2026-09-11
+
+### Fixed
+
+- Preserve pi-codex-tools grammar metadata and custom-tool history during remote compaction.
+- Honor pi-fast on direct compaction requests through a public event-bus contract.
+- Include cache writes and standard Pi compaction usage in session totals.
+- Restrict endpoint paths and ports; merge beta features and honor null auth headers.
+- Avoid I/O after pre-cancellation, bound total request time, and close completed SSE streams promptly.
+
+## [0.1.1] - 2026-08-06
+
+### Fixed
+
+- Let `enableInstallTelemetry: false` override an enabled `PI_TELEMETRY` environment flag.
+- Keep the normal Codex Responses request envelope while excluding Pi's retained user input from compaction history.
+- Avoid reusing opaque checkpoints across model, endpoint, account, or authentication-mode changes.
+- Avoid reusing opaque checkpoints when the authentication mode cannot be verified.
+- Reject version 1 opaque checkpoints from existing sessions and use readable fallback context until a new checkpoint is created.
+- Fall back to Pi's standard compactor when custom compaction instructions are supplied.
+
+### Added
+
+- Incremental bounded SSE parsing, transient request retries, response idle timeouts, provider usage capture, and file-operation fallback metadata.
+- Trusted-origin and redirect protections for direct Codex compaction requests.
+
+## [0.1.0] - 2026-08-02
+
+### Added
+
+- Initial `pi-codex-compaction` extension.
+- OpenAI Codex RemoteCompactionV2 support with standard Pi compaction fallback.
+- Opaque checkpoint persistence and bounded cross-model fallback context.
+
+### Fixed
+
+- Use Pi's compat provider entry point so the extension loads through the runtime extension loader.
+- Rehydrate summaries emitted as untyped Responses message items after model switches.
